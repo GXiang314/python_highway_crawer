@@ -2,6 +2,10 @@
 
 This project is a Python-based crawler for highway information.
 
+## Demo
+
+![Demo of highway crawler in action](./docs/demo.gif)
+
 ## Requirements
 
 - Python 3.8 or higher
