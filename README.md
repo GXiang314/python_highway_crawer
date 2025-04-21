@@ -78,6 +78,7 @@ python main.py [OPTIONS]
 | `--arrival STATION` | Specify the arrival station name | Interactive selection |
 | `--startDate YYYY.MM.DD` | Specify the departure date | Current date |
 | `--startTime HH:MM` | Specify the departure time | Current time |
+| `--format FORMAT` | Specify output format (json, csv) | json |
 
 #### Examples
 
@@ -105,9 +106,15 @@ Fetch all possible routes with specific date and time:
 python main.py --all --startDate "2024.05.01" --startTime "08:30"
 ```
 
+Fetch timetable and save as CSV:
+
+```bash
+python main.py --departure "台北" --arrival "左營" --format csv
+```
+
 ## Output
 
-Data is saved in JSON format in the `output` directory with a timestamp in the filename:
+Data is saved in `.json` or `.csv` format in the `output` directory with a timestamp in the filename:
 
 ```tree
 output/timetable_YYYYMMDD_HHMMSS.json

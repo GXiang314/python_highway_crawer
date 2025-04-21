@@ -7,6 +7,33 @@ import json
 import os
 from datetime import datetime
 import argparse
+import csv
+
+
+def save_to_file(data, filename, format='json'):
+    """Save data to a file in the specified format"""
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    output_dir = os.path.join(current_dir, 'output')
+
+    # Ensure the output directory exists
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Set appropriate file extension based on format
+    ext = format.lower()
+    output_path = os.path.join(
+        output_dir, f"{os.path.splitext(filename)[0]}.{ext}")
+
+    if format.lower() == 'json':
+        with open(output_path, 'w', encoding='utf-8') as json_file:
+            json.dump(data, json_file, ensure_ascii=False, indent=4)
+    elif format.lower() == 'csv':
+        if data and len(data) > 0:
+            with open(output_path, 'w', encoding='utf-8', newline='') as csv_file:
+                writer = csv.DictWriter(csv_file, fieldnames=data[0].keys())
+                writer.writeheader()
+                writer.writerows(data)
+
+    return output_path
 
 
 def setup_driver():
@@ -45,7 +72,7 @@ def extract_timetable(driver: Chrome):
 
     while True:
         timestableBlock = driver.find_element(By.CSS_SELECTOR, 'div#ttab-01')
-        
+
         wait = WebDriverWait(timestableBlock, timeout=3)
         wait.until(
             lambda d: d.find_elements(By.TAG_NAME, 'a') != current_elements
@@ -62,12 +89,16 @@ def extract_timetable(driver: Chrome):
             columns = row.find_elements(By.CSS_SELECTOR, 'div.tr-td')
             if len(columns) == 0:
                 continue
-                
+
             # Skip if this data-seq already exists in timetable_data
             data_seq = row.get_attribute('data-seq')
-            if any(item.get('data-seq') == data_seq for item in timetable_data):
+            if any(
+                    item.get('data-seq') == data_seq
+                    and item.get('departureStation') == departureStation
+                    and item.get('arrivalStation') == arrivalStation
+                    for item in timetable_data):
                 continue
-                
+
             timetable_data.append({
                 "data-seq": data_seq,
                 "departureStation": departureStation,
@@ -80,39 +111,48 @@ def extract_timetable(driver: Chrome):
                 'earlyBird': columns[5].text.strip(),
                 'remark': columns[6].text.strip()
             })
-        
+
         nextBtn = driver.find_element(By.CSS_SELECTOR, 'a#ttab-01_nextPage')
         if ('visibility: hidden' in nextBtn.get_attribute('style')):
             break
         nextBtn.click()
-    
+
     print(f"Total timetable data: {len(timetable_data)}")
     return timetable_data
 
 
 def get_timetable(driver: Chrome, departure_station, arrival_station, start_date, start_time):
     """Get timetable for specific stations and time"""
-    print(f"Searching for trains from {departure_station} to {arrival_station}")
+    print(
+        f"Searching for trains from {departure_station} to {arrival_station}")
     print(f"Date: {start_date}, Time: {start_time}")
-    
+
     # Set date and time
-    start_date_input = driver.find_element(By.CSS_SELECTOR, 'input#Departdate03')
-    start_time_input = driver.find_element(By.CSS_SELECTOR, 'input#outWardTime')
-    
+    start_date_input = driver.find_element(
+        By.CSS_SELECTOR, 'input#Departdate03')
+    start_time_input = driver.find_element(
+        By.CSS_SELECTOR, 'input#outWardTime')
+
     # Use JavaScript to set input values
-    driver.execute_script(f"arguments[0].value = '{start_date}'", start_date_input)
-    driver.execute_script(f"arguments[0].value = '{start_time}'", start_time_input)
+    driver.execute_script(
+        f"arguments[0].value = '{start_date}'", start_date_input)
+    driver.execute_script(
+        f"arguments[0].value = '{start_time}'", start_time_input)
 
     # Select departure and arrival stations
-    departure_select = driver.find_element(By.CSS_SELECTOR, 'select#select_location01')
-    arrival_select = driver.find_element(By.CSS_SELECTOR, 'select#select_location02')
-    
-    departure_option = departure_select.find_element(By.XPATH, f"option[text()='{departure_station}']")
+    departure_select = driver.find_element(
+        By.CSS_SELECTOR, 'select#select_location01')
+    arrival_select = driver.find_element(
+        By.CSS_SELECTOR, 'select#select_location02')
+
+    departure_option = departure_select.find_element(
+        By.XPATH, f"option[text()='{departure_station}']")
     departure_option.click()
-    
-    arrival_option = arrival_select.find_element(By.XPATH, f"option[text()='{arrival_station}']")
+
+    arrival_option = arrival_select.find_element(
+        By.XPATH, f"option[text()='{arrival_station}']")
     arrival_option.click()
-    
+
     # Click the search button
     search_button = driver.find_element(By.CSS_SELECTOR, 'button#start-search')
     search_button.click()
@@ -123,7 +163,7 @@ def get_timetable(driver: Chrome, departure_station, arrival_station, start_date
         lambda d: d.find_element(
             By.CSS_SELECTOR, 'div#search-loading').get_attribute('style') == 'display: none;'
     )
-    
+
     # Extract timetable data
     return extract_timetable(driver)
 
@@ -153,12 +193,13 @@ def display_stations(stations):
 def get_user_input(stations, default_station=None):
     """Get user input for station selection with default option"""
     if default_station:
-        default_index = stations.index(default_station) + 1 if default_station in stations else None
+        default_index = stations.index(
+            default_station) + 1 if default_station in stations else None
         prompt = f"Enter station number (press Enter for default - {default_station}): "
     else:
         default_index = None
         prompt = "Enter station number: "
-    
+
     while True:
         choice = input(prompt)
         if choice == "" and default_index:
@@ -193,13 +234,19 @@ def validate_time(time_str):
 
 def parse_args():
     """Parse command line arguments"""
-    parser = argparse.ArgumentParser(description='Taiwan High Speed Rail Timetable Crawler')
-    parser.add_argument('--all', action='store_true', help='Fetch timetables for all departure and arrival stations')
+    parser = argparse.ArgumentParser(
+        description='Taiwan High Speed Rail Timetable Crawler')
+    parser.add_argument('--all', action='store_true',
+                        help='Fetch timetables for all departure and arrival stations')
     parser.add_argument('--departure', type=str, help='Departure station name')
     parser.add_argument('--arrival', type=str, help='Arrival station name')
-    parser.add_argument('--startDate', type=str, help='Start date in YYYY.MM.DD format')
-    parser.add_argument('--startTime', type=str, help='Start time in HH:MM format')
-    
+    parser.add_argument('--startDate', type=str,
+                        help='Start date in YYYY.MM.DD format')
+    parser.add_argument('--startTime', type=str,
+                        help='Start time in HH:MM format')
+    parser.add_argument('--format', type=str, choices=['json', 'csv'], default='json',
+                        help='Output format (json or csv)')
+
     return parser.parse_args()
 
 
@@ -210,34 +257,37 @@ def main():
     # Set default values
     default_date = datetime.now().strftime('%Y.%m.%d')
     default_time = datetime.now().strftime('%H:%M')
-    
+
     # Parse command line arguments
     args = parse_args()
-    
+
     try:
         print("Initializing web driver...")
         driver = setup_driver()
         driver.get(url)
-        
+
         # Handle popup if appears
         try:
             wait = WebDriverWait(driver, timeout=5)
             cancel_button = wait.until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, 'button.swal2-cancel.swal2-styled'))
+                EC.element_to_be_clickable(
+                    (By.CSS_SELECTOR, 'button.swal2-cancel.swal2-styled'))
             )
             cancel_button.click()
         except:
             print("No popup found or it couldn't be closed.")
-        
+
         print("Getting available stations...")
         stations_data = get_stations(driver)
-        
+
         # Set date and time
-        start_date = args.startDate if args.startDate and validate_date(args.startDate) else default_date
-        start_time = args.startTime if args.startTime and validate_time(args.startTime) else default_time
+        start_date = args.startDate if args.startDate and validate_date(
+            args.startDate) else default_date
+        start_time = args.startTime if args.startTime and validate_time(
+            args.startTime) else default_time
 
         all_results = []
-        
+
         # Handle different command line option scenarios
         if args.all:
             # Process all departures and all arrivals
@@ -246,118 +296,136 @@ def main():
                 for arr_station in stations_data['arrival_stations']:
                     if dep_station != arr_station:  # Skip same departure and arrival
                         try:
-                            result = get_timetable(driver, dep_station, arr_station, start_date, start_time)
+                            result = get_timetable(
+                                driver, dep_station, arr_station, start_date, start_time)
                             all_results.extend(result)
                         except Exception as e:
-                            print(f"Error processing {dep_station} to {arr_station}: {str(e)}")
-        
+                            print(
+                                f"Error processing {dep_station} to {arr_station}: {str(e)}")
+
         elif args.departure and not args.arrival:
             # Process specified departure to all arrivals
             if args.departure not in stations_data['departure_stations']:
-                print(f"Error: Departure station '{args.departure}' not found.")
+                print(
+                    f"Error: Departure station '{args.departure}' not found.")
                 display_stations(stations_data['departure_stations'])
                 return
-                
-            print(f"Processing departure from {args.departure} to all arrivals...")
+
+            print(
+                f"Processing departure from {args.departure} to all arrivals...")
             for arr_station in stations_data['arrival_stations']:
                 if args.departure != arr_station:  # Skip same departure and arrival
                     try:
-                        result = get_timetable(driver, args.departure, arr_station, start_date, start_time)
+                        result = get_timetable(
+                            driver, args.departure, arr_station, start_date, start_time)
                         all_results.extend(result)
                     except Exception as e:
-                        print(f"Error processing {args.departure} to {arr_station}: {str(e)}")
-        
+                        print(
+                            f"Error processing {args.departure} to {arr_station}: {str(e)}")
+
         elif args.arrival and not args.departure:
             # Process all departures to specified arrival
             if args.arrival not in stations_data['arrival_stations']:
                 print(f"Error: Arrival station '{args.arrival}' not found.")
                 display_stations(stations_data['arrival_stations'])
                 return
-                
+
             print(f"Processing all departures to {args.arrival}...")
             for dep_station in stations_data['departure_stations']:
                 if dep_station != args.arrival:  # Skip same departure and arrival
                     try:
-                        result = get_timetable(driver, dep_station, args.arrival, start_date, start_time)
+                        result = get_timetable(
+                            driver, dep_station, args.arrival, start_date, start_time)
                         all_results.extend(result)
                     except Exception as e:
-                        print(f"Error processing {dep_station} to {args.arrival}: {str(e)}")
-        
+                        print(
+                            f"Error processing {dep_station} to {args.arrival}: {str(e)}")
+
         elif args.departure and args.arrival:
             # Process specific departure to specific arrival
             if args.departure not in stations_data['departure_stations']:
-                print(f"Error: Departure station '{args.departure}' not found.")
+                print(
+                    f"Error: Departure station '{args.departure}' not found.")
                 display_stations(stations_data['departure_stations'])
                 return
-                
+
             if args.arrival not in stations_data['arrival_stations']:
                 print(f"Error: Arrival station '{args.arrival}' not found.")
                 display_stations(stations_data['arrival_stations'])
                 return
-                
+
             if args.departure == args.arrival:
                 print("Error: Departure and arrival stations cannot be the same.")
                 return
-                
+
             print(f"Processing {args.departure} to {args.arrival}...")
-            result = get_timetable(driver, args.departure, args.arrival, start_date, start_time)
+            result = get_timetable(
+                driver, args.departure, args.arrival, start_date, start_time)
             all_results.extend(result)
-        
+
         else:
             # Interactive mode if no command line options specified
             # Display departure stations and get user selection with default
             default_departure = stations_data['departure_stations'][0]
-            print(f"\nSelect departure station (default: {default_departure}):")
+            print(
+                f"\nSelect departure station (default: {default_departure}):")
             display_stations(stations_data['departure_stations'])
-            departure_station = get_user_input(stations_data['departure_stations'], default_departure)
-            
+            departure_station = get_user_input(
+                stations_data['departure_stations'], default_departure)
+
             # Display arrival stations and get user selection with default
             default_arrival = stations_data['arrival_stations'][-1]
             print(f"\nSelect arrival station (default: {default_arrival}):")
             display_stations(stations_data['arrival_stations'])
-            arrival_station = get_user_input(stations_data['arrival_stations'], default_arrival)
-            
+            arrival_station = get_user_input(
+                stations_data['arrival_stations'], default_arrival)
+
             # Validate departure and arrival stations aren't the same
             while departure_station == arrival_station:
-                print("Departure and arrival stations cannot be the same. Please select a different arrival station.")
+                print(
+                    "Departure and arrival stations cannot be the same. Please select a different arrival station.")
                 print("\nSelect arrival station:")
                 display_stations(stations_data['arrival_stations'])
-                arrival_station = get_user_input(stations_data['arrival_stations'])
-            
+                arrival_station = get_user_input(
+                    stations_data['arrival_stations'])
+
             # Get date from user with default
             while True:
-                start_date = input(f"\nEnter departure date (YYYY.MM.DD) (press Enter for today - {default_date}): ")
+                start_date = input(
+                    f"\nEnter departure date (YYYY.MM.DD) (press Enter for today - {default_date}): ")
                 if start_date == "":
                     start_date = default_date
                     break
                 if validate_date(start_date):
                     break
                 print("Invalid date format. Please use YYYY.MM.DD format.")
-            
+
             # Get time from user with default
             while True:
-                start_time = input(f"Enter departure time (HH:MM) (press Enter for current time - {default_time}): ")
+                start_time = input(
+                    f"Enter departure time (HH:MM) (press Enter for current time - {default_time}): ")
                 if start_time == "":
                     start_time = default_time
                     break
                 if validate_time(start_time):
                     break
                 print("Invalid time format. Please use HH:MM format.")
-            
+
             # Get timetable data for single selection
-            result = get_timetable(driver, departure_station, arrival_station, start_date, start_time)
+            result = get_timetable(
+                driver, departure_station, arrival_station, start_date, start_time)
             all_results.extend(result)
-        
+
         # Save all results to file
         if all_results:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"timetable_{timestamp}.json"
-            output_path = save_to_json(all_results, filename)
+            filename = f"timetable_{timestamp}"
+            output_path = save_to_file(all_results, filename, args.format)
             print(f"\nData has been successfully written to {output_path}")
             print(f"Total records: {len(all_results)}")
         else:
             print("No data was collected.")
-            
+
     finally:
         # Ensure driver is closed even if an error occurs
         if 'driver' in locals():
