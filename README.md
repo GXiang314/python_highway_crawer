@@ -1,16 +1,17 @@
-# Python Highway Crawer
+# Taiwan High Speed Rail Timetable Crawler
 
-This project is a Python-based crawler for highway information.
+This project is a Python-based crawler for Taiwan High Speed Rail (THSR) timetable information. It automates the process of retrieving train schedules between stations.
 
 ## Demo
 
-![Demo of highway crawler in action](./docs/demo.gif)
+![Demo of THSR crawler in action](./docs/demo.gif)
 
 ## Requirements
 
 - Python 3.8 or higher
-- pip3 (package installer for Python)
-- Virtual environment (venv)
+- Chrome browser
+- ChromeDriver (compatible with your Chrome version)
+- Required Python packages (see `requirements.txt`)
 
 ## Setup
 
@@ -40,32 +41,105 @@ source venv/bin/activate
 ### 3. Install dependencies
 
 ```bash
-pip3 install -r requirements.txt
+pip install -r requirements.txt
 ```
 
 ## Usage
 
-To run the crawler:
+### Basic Usage (Interactive Mode)
+
+Run the script without arguments to use interactive mode:
 
 ```bash
 python main.py
 ```
 
-## Expected Results
+You'll be prompted to:
 
-After running the crawler successfully, you should see:
+1. Select a departure station
+2. Select an arrival station
+3. Enter a date (or press Enter for today)
+4. Enter a time (or press Enter for current time)
 
-1. Console output showing the crawling progress
-2. Data saved in the `output` directory (in JSON format by default)
-3. Summary of collected data points
+### Command-Line Options
+
+The script supports several command-line arguments for automated operation:
+
+```bash
+python main.py [OPTIONS]
+```
+
+#### Available Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--all` | Fetch timetables for all possible station combinations | False |
+| `--departure STATION` | Specify the departure station name | Interactive selection |
+| `--arrival STATION` | Specify the arrival station name | Interactive selection |
+| `--startDate YYYY.MM.DD` | Specify the departure date | Current date |
+| `--startTime HH:MM` | Specify the departure time | Current time |
+
+#### Examples
+
+Fetch timetable for a specific route:
+
+```bash
+python main.py --departure "台北" --arrival "左營"
+```
+
+Fetch all routes from a specific departure station:
+
+```bash
+python main.py --departure "台北"
+```
+
+Fetch all routes to a specific arrival station:
+
+```bash
+python main.py --arrival "左營"
+```
+
+Fetch all possible routes with specific date and time:
+
+```bash
+python main.py --all --startDate "2024.05.01" --startTime "08:30"
+```
+
+## Output
+
+Data is saved in JSON format in the `output` directory with a timestamp in the filename:
+
+```tree
+output/timetable_YYYYMMDD_HHMMSS.json
+```
+
+Each entry includes:
+
+- Departure and arrival stations
+- Departure and arrival times
+- Travel time
+- Train number
+- Seat availability information
+- Early bird discount information
+- Additional remarks
+
+## Limitations
+
+1. The crawler depends on the THSR website structure; changes to their website may break functionality
+2. Chrome browser and ChromeDriver must be installed and compatible
+3. Internet connection is required
+4. Rate limiting may be applied by the THSR website for frequent requests
+5. Departure and arrival stations cannot be the same
+6. The crawler may encounter issues with popup handling if the website changes
 
 ## Project Structure
 
 ```tree
 python_highway_crawer/
-├── main.py            # Entry point
-├── output/            # Output directory for data
-├── requirements.txt   # Dependencies
+├── main.py            # Main script
+├── output/            # Directory for JSON output
+├── requirements.txt   # Python dependencies
+├── docs/              # Documentation assets
 └── README.md          # This file
 ```
 
@@ -73,10 +147,11 @@ python_highway_crawer/
 
 If you encounter any issues:
 
-1. Ensure you're using the correct Python version
-2. Check that all dependencies are installed
+1. Ensure Chrome and ChromeDriver are properly installed
+2. Check that all dependencies are installed correctly
 3. Verify your internet connection
-4. Check the logs for detailed error messages
+4. Ensure the THSR website is accessible
+5. Check for website structure changes that might affect the crawler
 
 ## License
 
